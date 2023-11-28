@@ -48,7 +48,7 @@ c = lambda: cycle(
 my_iter = c()
 
 # add a shared value that can simulate sensor update period
-delay_queue = Queue(6)
+delay_queue = Queue(1)
 delay_queue.put(0.01)
 
 
@@ -74,7 +74,7 @@ def main():
 
     main_page = BokehPage(LayoutDefaults(delay_queue=delay_queue))
 
-    for _ in range(1):
+    for _ in range(6):
         my_signals = next(my_iter)
         plots.append(
             BokehPlot(

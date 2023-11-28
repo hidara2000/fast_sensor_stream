@@ -30,8 +30,6 @@ class Sensor(Thread):
         self.sensor_callback = plt.update
         self.bokeh_callback = plt.doc.add_next_tick_callback
 
-        self.i = 0
-
     def get_delay(self) -> float:
         """Get delay in a thread safe manner
 
@@ -55,5 +53,4 @@ class Sensor(Thread):
 
             self.x += 0.35
 
-            self.i += 1
             self.bokeh_callback(partial(self.sensor_callback, self.data))
