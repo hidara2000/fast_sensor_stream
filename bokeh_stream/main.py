@@ -48,7 +48,7 @@ c = lambda: cycle(
 my_iter = c()
 
 # add a shared value that can simulate sensor update period
-delay_queue = Queue(1)
+delay_queue = Queue(6)
 delay_queue.put(0.01)
 
 

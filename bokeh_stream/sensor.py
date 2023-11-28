@@ -54,6 +54,6 @@ class Sensor(Thread):
             self.data["x"] = [self.x]
 
             self.x += 0.35
-            print(self.i)
+
             self.i += 1
             self.bokeh_callback(partial(self.sensor_callback, self.data))
