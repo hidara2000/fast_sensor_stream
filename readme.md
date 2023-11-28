@@ -11,6 +11,9 @@ bokeh serve --show bokeh_stream
 
 #### OUTPUT in BROWSER
 ![Alt text](image.png)
+> video
+<video src="live%20sensor.mp4" controls title="Title"></video>
+
 
 ### NOTES
 - Still a work in progress
