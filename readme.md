@@ -15,6 +15,7 @@ https://github.com/hidara2000/fast_sensor_stream/assets/15170494/54571ddb-683d-4
 
 ### NOTES
 - Still a work in progress
+- The delay slider is just to simulate update frequency of the dummy data and work well up to 100HZ with 7 streams as per the video below
 - All code relating to delay can be deleted when using real sensor data but if the data streams at more than 100HZ and you have multiple plots add a delay of around 0.005->0.01secs in the run loop below
 - for real data just replace the Sensor class with something similar to below
     ``` python
