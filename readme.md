@@ -15,6 +15,10 @@ bokeh serve --show bokeh_stream
 <video src="live%20sensor.mp4" controls title="Title"></video>
 
 
+
+https://github.com/hidara2000/fast_sensor_stream/assets/15170494/54571ddb-683d-4edf-a13f-bb2f46bff57d
+
+
 ### NOTES
 - Still a work in progress
 - All code relating to delay can be deleted when using real sensor data but if the data streams at more than 100HZ and you have multiple plots add a delay of around 0.005->0.01secs in the run loop below
