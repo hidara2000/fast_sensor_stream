@@ -1,7 +1,7 @@
 import time
 from functools import partial
-from threading import Thread, Lock
 from queue import Queue
+from threading import Lock, Thread
 from typing import TYPE_CHECKING, Callable, Dict
 
 import numpy as np
@@ -12,6 +12,13 @@ if TYPE_CHECKING:
 
 class Sensor(Thread):
     def __init__(self, plt: "BokehPlot", fns: Dict, delay_queue: Queue):
+        """Initialise pretend sensor data. This can be replaced with real data based on project
+
+        Args:
+            plt (BokehPlot): plot to display the data
+            fns (Dict): function to generate plot data
+            delay_queue (Queue): set selay before each update
+        """
         Thread.__init__(self)
 
         self.ys = {}
@@ -25,16 +32,21 @@ class Sensor(Thread):
 
         self.i = 0
 
+    def get_delay(self) -> float:
+        """Get delay in a thread safe manner
 
-    def get_delay(self):
+        Returns:
+            float: delay
+        """
         with self.queueLock:
             delay = self.delay_queue.get()
             self.delay_queue.put(delay)
 
         return delay
 
-
     def run(self):
+        """Generate data
+        """
         while True:
             time.sleep(self.get_delay())
 
@@ -42,6 +54,6 @@ class Sensor(Thread):
             self.data["x"] = [self.x]
 
             self.x += 0.35
-            print( self.i)
-            self.i +=1
+            print(self.i)
+            self.i += 1
             self.bokeh_callback(partial(self.sensor_callback, self.data))

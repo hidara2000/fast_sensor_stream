@@ -43,12 +43,21 @@ c = lambda: cycle(
         },
     ]
 )
+
+# create some functions to create dummy data
 my_iter = c()
-delay_queue = Queue()
+
+# add a shared value that can simulate sensor update period
+delay_queue = Queue(1)
 delay_queue.put(0.01)
 
 
 def threads(plt: BokehPlot):
+    """Add threads that generate pretend sensor data
+
+    Args:
+        plt (BokehPlot): Plot containing data
+    """
     global my_iter, delay_queue
 
     my_signals = next(my_iter)
@@ -57,6 +66,8 @@ def threads(plt: BokehPlot):
 
 
 def main():
+    """Create live plots at ~100Hz update frequency
+    """
     global my_iter, delay_queue
 
     plots = []
