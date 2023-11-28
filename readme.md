@@ -10,12 +10,6 @@ bokeh serve --show bokeh_stream
 ```
 
 #### OUTPUT in BROWSER
-![Alt text](image.png)
-> video
-<video src="live%20sensor.mp4" controls title="Title"></video>
-
-
-
 https://github.com/hidara2000/fast_sensor_stream/assets/15170494/54571ddb-683d-4edf-a13f-bb2f46bff57d
 
 
