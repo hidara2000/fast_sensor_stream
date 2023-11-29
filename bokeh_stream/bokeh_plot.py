@@ -159,10 +159,11 @@ class BokehPage:
         )
         self.sensor_speed.on_change("value", self.sensor_speed_handler)
 
+        self.hertz_div = Div(
+            text=f"<b>Each plot is updating at {1/self.defaults.sensor_speed_slider_value:.1f}Hz</b>"
+        )
 
-        self.hertz_div = Div(text=f"<b>Each plot is updating at {1/self.defaults.sensor_speed_slider_value:.1f}Hz</b>")
-
-        a =1
+        a = 1
         itms = [
             self.header,
             self.start_stop_checkbox,

@@ -1,10 +1,11 @@
 import time
 from collections import deque
 from dataclasses import dataclass
-from functools import partial
-from threading import Lock, Thread, Event
-from typing import TYPE_CHECKING, Callable, Dict
 from datetime import datetime as dt
+from functools import partial
+from threading import Event, Lock, Thread
+from typing import TYPE_CHECKING, Callable, Dict
+
 import numpy as np
 from stack import RollingStack
 
@@ -31,7 +32,7 @@ class SensorProducer(Thread):
         self.fns = details.fns
 
         self.start_time = self.current_milli_time()
-        self.x = self.start_time 
+        self.x = self.start_time
 
         self.data = {y: [0] for y, _ in details.fns.items()}
         self.data["x"] = [self.start_time]
@@ -41,22 +42,23 @@ class SensorProducer(Thread):
         while True:
             if self.sensor_is_reading.is_set():
                 time.sleep(self.details.delay_q.latest())
-                self.x = self.current_milli_time(self.start_time)/ 300
+                self.x = self.current_milli_time(self.start_time) / 300
                 self.data = {y: [fn(self.x)] for y, fn in self.fns.items()}
                 self.data["x"] = [self.x]
 
                 self.details.data_q.append(self.data)
 
-
     def read(self):
         return self.details.data_q.latest()
-    
+
     def current_milli_time(self, start_time=0):
         return round(time.time() * 1000) - start_time
 
 
 class SensorConsumer(Thread):
-    def __init__(self, plt: "BokehPlot", sensor: SensorProducer, sensor_is_reading: Event):
+    def __init__(
+        self, plt: "BokehPlot", sensor: SensorProducer, sensor_is_reading: Event
+    ):
         """Initialise pretend sensor data. This can be replaced with real data based on project
 
         Args:
@@ -79,4 +81,6 @@ class SensorConsumer(Thread):
 
             if self.sensor_is_reading.is_set():
                 with self.threadLock:
-                    self.bokeh_callback(partial(self.sensor_callback, self.sensor.read()))
+                    self.bokeh_callback(
+                        partial(self.sensor_callback, self.sensor.read())
+                    )

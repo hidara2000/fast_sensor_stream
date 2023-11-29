@@ -19,59 +19,108 @@ https://github.com/hidara2000/fast_sensor_stream/assets/15170494/540b1502-6797-4
 
 ### NOTES
 - Still a work in progress
-- The delay slider is just to simulate update frequency of the dummy data and work well up to 100HZ with 7 streams as per the video below
-- All code relating to delay can be deleted when using real sensor data but if the data streams at more than 100HZ and you have multiple plots add a delay of around 0.005->0.01secs in the run loop below
-- for real data just replace the Sensor class with something similar to below
+- The delay slider allows for manually adding a delay needed for the plots to update. In WSL, with an i7, a single plot with two lines is comfortable at 400Hz but may miss 1 reading ever 2000 updates. Reduce to 200Hz for a more stable performance. For 6 plots, 7 lines 67Hz works well
+- for real data just replace the SensorProducer class with something similar to below
     ``` python
-    class Sensor(Thread):
-        def __init__(self, plt: "BokehPlot", fn: Callable, delay_queue: Queue=None):
-            """Initialise pretend sensor data. This can be replaced with real data based on project
-
-            Args:
-                plt (BokehPlot): plot to display the data
-                fns (Dict): function to generate plot data
-                delay_queue (Queue): set selay before each update
-            """
+    class SensorProducer(Thread):
+        def __init__(self, details: SensorDetails, sensor_is_reading: Event) -> None:
             Thread.__init__(self)
+            self.details = details
+            self.sensor_is_reading = sensor_is_reading
 
-            self.ys = {}
-            self.x = 0
-            self.fn = fn
+            self.fn = details.fn
+            self.data = {'x': [0],'y': [0]}
 
-            self.sensor_callback = plt.update
-            self.bokeh_callback = plt.doc.add_next_tick_callback
-
+            self.details.data_q.append(self.data)
 
         def run(self):
-            """Generate data
-            """
             while True:
-                # using your own sensor reading function ensure it returns a list as follows
-                # [x_val, {dict of ys}]
-                # where {dict of ys} is as follows for one line in a plot
-                #
-                # {'y': <latest_sensor_reading>}
-                #
-                # or multiple lines in a plot eg gyro or accelerometer
-                #
-                #  {'y': <latest_sensor_reading_0>,
-                #  'y1': <latest_sensor_reading_1>,
-                #  'y2': <latest_sensor_reading_2>,
-                #  'y3': <latest_sensor_reading_3>,
-                #                  ...
-                #  'yn': <latest_sensor_reading_n>}
-                # this will plot n lines in a single plot
-                x, ys = fn.read_sensor_data()
+                if self.sensor_is_reading.is_set():
+                    time.sleep(self.details.delay_q.latest())
 
-                self.data = {y_key: [y_value] for y_key, y_value in ys.items()}
-                self.data["x"] = [self.x]
+                    self.details.data_q.append(self.fn())
 
-                self.bokeh_callback(partial(self.sensor_callback, self.data))
+        def read(self):
+            return self.details.data_q.latest()
+        
+        def current_milli_time(self, start_time=0):
+            return round(time.time() * 1000) - start_time
     ```
     and adjust the code in main so that it just sends the sensor read function and adjust the dictionary to reflect title, legend values etc
 
-### KNOWN ISSUES
-sometimes following error occurs. Could be to do will all plots using the same update callback (plt.doc.add_next_tick_callback) function. Will address it later    
-```
-AttributeError: 'DocumentCallbackManager' object has no attribute '_change_callbacks'
-```
+    ### Sample sensor read function
+    ```python
+    def get_latest_sensor_data(self):
+        """Some code that reads sensor data and returns returns a dict formatted as follows
+
+        For a single line
+
+            data = {'x': [<x_latest_sensor_reading>],'y': [<y_latest_sensor_reading>]}
+            
+            or multiple lines in a plot eg gyro or accelerometer
+            
+            
+            data = {
+                'x':  [<x_latest_sensor_reading>]
+                'y':  [<y_latest_sensor_reading_0>],
+                'y1': [<y2_latest_sensor_reading_1]>,
+                'y2': [<y3_latest_sensor_reading_2]>,
+                'y3': [<y4_latest_sensor_reading_3]>,
+                                ...
+                'yn': [<y_latest_sensor_reading_n]>
+            }
+            
+            this will plot n lines in a single plot. Note all x & y values are in a list eg {'x': [0.123],'y': [12.45]}
+
+
+            return data
+        """
+    ```
+
+    ### Sample sensor SensorDetails
+    ```python
+    class SensorDetails:
+        fn: Callable
+        legend: Dict[str, str]
+        title: str
+        # a slight delay is needed for high frequency sensor data (>100Hz)
+        delay_q: RollingStack
+        data_q: RollingStack
+    
+    ```
+
+    ### Sample main
+    ``` python
+    def main():
+        sensor_speed_slider_value = 0.0025
+
+        delay_queue = RollingStack(1, sensor_speed_slider_value)
+        sensor_is_reading = Event()
+        sensor_is_reading.set()
+
+        my_signal = (
+            SensorDetails(
+                get_latest_sensor_data,
+                {"y": "Sensor Reading"},
+                "Proximity Sensor Readings",
+                delay_queue,
+                RollingStack(3),
+            ),
+        )
+
+        main_page = BokehPage(
+            LayoutDefaults(delay_queue, 
+            sensor_speed_slider_value=sensor_speed_slider_value),
+            sensor_is_reading,
+        )
+
+        producer = SensorProducer(get_latest_sensor_data, sensor_is_reading)
+        plt = BokehPlot(main_page, my_signal)
+        consumer = SensorConsumer(plt, producer, sensor_is_reading)
+
+        producer.start()
+        consumer.start()
+
+        main_page.add_plots([plt])
+    
+    ```

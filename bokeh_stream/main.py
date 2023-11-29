@@ -56,11 +56,9 @@ def gen_fake_data(delay_queue):
         ]
     )
 
-    # create some functions to create dummy data
-
 
 def main():
-    """Create live plots at ~100Hz update frequency"""
+    """Create live plots"""
     n_plots = 6
     sensor_speed_slider_value = 0.0025 * n_plots
 
