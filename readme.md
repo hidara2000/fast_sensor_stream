@@ -9,8 +9,12 @@ pip install -r requirements.txt
 bokeh serve --show bokeh_stream
 ```
 
-#### OUTPUT in BROWSER
-https://github.com/hidara2000/fast_sensor_stream/assets/15170494/54571ddb-683d-4edf-a13f-bb2f46bff57d
+#### 1 plot @ 400Hz
+https://github.com/hidara2000/fast_sensor_stream/assets/15170494/89822124-09c2-4aed-bc7a-2644c3e27b70
+
+    
+#### 6 plots @ 67Hz each
+https://github.com/hidara2000/fast_sensor_stream/assets/15170494/540b1502-6797-492d-904d-713d164ceb43
 
 
 ### NOTES
