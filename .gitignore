@@ -1,3 +1,5 @@
 *.pyc
 bokeh_ls/__pycache__
 bokeh_stream/.mypy_cache
+bokeh_stream/main.py
+*.ipynb

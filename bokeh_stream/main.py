@@ -1,97 +1,95 @@
 from functools import partial
 from itertools import cycle
-from queue import Queue
+from threading import Event
 
 import numpy as np
 from bokeh_plot import BokehPage, BokehPlot, LayoutDefaults, PlotDefaults
 from scipy.signal import chirp, sawtooth, square, sweep_poly
-from sensor import Sensor
-
-c = lambda: cycle(
-    [
-        {
-            "fns": {"y": np.cos, "y1": np.sin},
-            "ys_legend_text": {"y": "Cos(x)", "y1": "Sin(x)"},
-            "title": "Cos & Sine Waves",
-        },
-        {
-            "fns": {"y": np.sin},
-            "ys_legend_text": {"y": "Sin(x)"},
-            "title": "Simple Sin Wave",
-        },
-        {
-            "fns": {"y": sawtooth},
-            "ys_legend_text": {"y": "Sawtooth(x)"},
-            "title": "Sawtooth",
-        },
-        {
-            "fns": {"y": partial(chirp, f0=6, f1=1, t1=10, method="linear")},
-            "ys_legend_text": {"y": "chirp(x)"},
-            "title": "Chirp",
-        },
-        {
-            "fns": {
-                "y": partial(sweep_poly, poly=np.poly1d([0.025, -0.36, 1.25, 2.0]))
-            },
-            "ys_legend_text": {"y": "Sweep(x)"},
-            "title": "Sweep",
-        },
-        {
-            "fns": {"y": square},
-            "ys_legend_text": {"y": "Square(x)"},
-            "title": "Square",
-        },
-    ]
-)
-
-# create some functions to create dummy data
-my_iter = c()
-
-# add a shared value that can simulate sensor update period
-delay_queue = Queue(1)
-delay_queue.put(0.01)
+from sensor import RollingStack, SensorConsumer, SensorDetails, SensorProducer
 
 
-def threads(plt: BokehPlot):
-    """Add threads that generate pretend sensor data
+def gen_fake_data(delay_queue):
+    return cycle(
+        [
+            SensorDetails(
+                {"y": np.cos, "y1": np.sin},
+                {"y": "Cos(x)", "y1": "Sin(x)"},
+                "Cos & Sine Waves",
+                delay_queue,
+                RollingStack(3),
+            ),
+            SensorDetails(
+                {"y": np.sin},
+                {"y": "Sin(x)"},
+                "Simple Sin Wave",
+                delay_queue,
+                RollingStack(3),
+            ),
+            SensorDetails(
+                {"y": sawtooth},
+                {"y": "Sawtooth(x)"},
+                "Sawtooth",
+                delay_queue,
+                RollingStack(3),
+            ),
+            SensorDetails(
+                {"y": partial(chirp, f0=6, f1=1, t1=10, method="linear")},
+                {"y": "chirp(x)"},
+                "Chirp",
+                delay_queue,
+                RollingStack(3),
+            ),
+            SensorDetails(
+                {"y": partial(sweep_poly, poly=np.poly1d([0.025, -0.36, 1.25, 2.0]))},
+                {"y": "Sweep(x)"},
+                "Sweep",
+                delay_queue,
+                RollingStack(3),
+            ),
+            SensorDetails(
+                {"y": square},
+                {"y": "Square Wave(x)"},
+                "Square",
+                delay_queue,
+                RollingStack(3),
+            ),
+        ]
+    )
 
-    Args:
-        plt (BokehPlot): Plot containing data
-    """
-    global my_iter, delay_queue
-
-    my_signals = next(my_iter)
-    sensor = Sensor(plt, my_signals["fns"], delay_queue)
-    sensor.start()
+    # create some functions to create dummy data
 
 
 def main():
-    """Create live plots at ~100Hz update frequency
-    """
-    global my_iter, delay_queue
+    """Create live plots at ~100Hz update frequency"""
+    n_plots = 6
+    sensor_speed_slider_value = 0.0025 * n_plots
+
+    delay_queue = RollingStack(1, sensor_speed_slider_value)
+    iter_fake_sensors = gen_fake_data(delay_queue)
+    sensor_is_reading = Event()
+    sensor_is_reading.set()
 
     plots = []
 
-    main_page = BokehPage(LayoutDefaults(delay_queue=delay_queue))
+    main_page = BokehPage(
+        LayoutDefaults(
+            delay_queue, sensor_speed_slider_value=sensor_speed_slider_value
+        ),
+        sensor_is_reading,
+    )
 
-    for _ in range(6):
-        my_signals = next(my_iter)
-        plots.append(
-            BokehPlot(
-                main_page,
-                sensor_thread=threads,
-                defaults=PlotDefaults(
-                    plot_title=my_signals["title"],
-                    ys_legend_text=my_signals["ys_legend_text"],
-                ),
-            )
-        )
+    for _ in range(n_plots):
+        my_signal = next(iter_fake_sensors)
 
-    # reset cycle so that titles match up
-    my_iter = c()
+        producer = SensorProducer(my_signal, sensor_is_reading)
+        plt = BokehPlot(main_page, my_signal)
+        consumer = SensorConsumer(plt, producer, sensor_is_reading)
+
+        plots.append(plt)
+        producer.start()
+        consumer.start()
+
     main_page.add_plots(plots)
-
-    _ = [threads(x) for x in plots]
 
 
 # Run command:

@@ -1,9 +1,8 @@
 from dataclasses import asdict, dataclass, field
 from itertools import cycle
 from pprint import pformat
-from queue import Queue
-from threading import Lock
-from typing import Dict, List
+from threading import Event
+from typing import Callable, Dict, List
 
 from bokeh.io import curdoc
 from bokeh.layouts import column, gridplot
@@ -11,9 +10,8 @@ from bokeh.models import ColumnDataSource, HoverTool, Legend
 from bokeh.models.widgets import CheckboxGroup, Div, Slider
 from bokeh.palettes import Dark2_5 as palette
 from bokeh.plotting import figure
+from sensor import RollingStack, SensorConsumer, SensorDetails
 from tornado import gen
-
-from sensor import Sensor
 
 
 @dataclass
@@ -33,6 +31,7 @@ class PlotDefaults(GenericDataclass):
         GenericDataclass (Class): adds pretty printouts for debugging
     """
 
+    sensor_details: SensorDetails = None
     plot_tools: str = "box_zoom,pan,wheel_zoom,reset"
     tooltips: List = field(
         default_factory=lambda: [
@@ -52,6 +51,11 @@ class PlotDefaults(GenericDataclass):
     plot_height: int = 500
     ys_legend_text: Dict = field(default_factory=lambda: {"y": "Fn(x)"})
 
+    def __post_init__(self):
+        if self.sensor_details:
+            self.ys_legend_text = self.sensor_details.legend
+            self.plot_title = self.sensor_details.title
+
 
 @dataclass
 class LayoutDefaults(GenericDataclass):
@@ -61,7 +65,7 @@ class LayoutDefaults(GenericDataclass):
         GenericDataclass (Class): adds pretty printouts for debugging
     """
 
-    delay_queue: Queue
+    delay_queue: RollingStack
 
     page_title: str = "Real Time Sensor Data"
     page_title_colour: str = "white"
@@ -70,21 +74,21 @@ class LayoutDefaults(GenericDataclass):
 
     # how much data to scroll
     window_slider_start: int = 1
-    window_slider_end: int = 200
-    window_slider_value: int = 30
+    window_slider_end: int = 1000
+    window_slider_value: int = 125
     window_slider_step: int = 1
 
     # how fast to simulate sensor new datapoints
-    sensor_speed_slider_start: int = 0.01
-    sensor_speed_slider_end: int = 0.25
+    sensor_speed_slider_start: int = 0.005
+    sensor_speed_slider_end: int = 0.5
     sensor_speed_slider_value: int = 0.01
-    sensor_speed_slider_step: int = 0.005
+    sensor_speed_slider_step: int = 0.01
 
     n_columns: int = 3
 
 
 class BokehPage:
-    def __init__(self, defaults: LayoutDefaults) -> None:
+    def __init__(self, defaults: LayoutDefaults, sensor_is_reading: Event) -> None:
         """Initialse page/canvas
 
         Args:
@@ -100,7 +104,7 @@ class BokehPage:
         self.sensor_speed_slider = None
         self.all_plots = None
         self.plots = None
-        self.queue_lock = Lock()
+        self.sensor_is_reading = sensor_is_reading
 
         self.header = Div(
             text=f"<h1 style='color:{defaults.page_title_colour}'>{defaults.page_title}</h1>",
@@ -155,11 +159,16 @@ class BokehPage:
         )
         self.sensor_speed.on_change("value", self.sensor_speed_handler)
 
+
+        self.hertz_div = Div(text=f"<b>Each plot is updating at {1/self.defaults.sensor_speed_slider_value:.1f}Hz</b>")
+
+        a =1
         itms = [
             self.header,
             self.start_stop_checkbox,
             self.window_width_slider,
             self.sensor_speed,
+            self.hertz_div,
             self.all_plots,
         ]
         for itm in itms:
@@ -178,11 +187,10 @@ class BokehPage:
             old (int): only used as a placeholder
             new (int): current checkbox value: 0 off, 1 on
         """
-        for p in self.plots:
-            if new == 0:
-                p.is_plotting = True
-            else:
-                p.is_plotting = False
+        if new:
+            self.sensor_is_reading.set()
+        else:
+            self.sensor_is_reading.clear()
 
     def window_width_handler(self, attr, old, new):
         """Pause plot updates so you can
@@ -202,35 +210,32 @@ class BokehPage:
             old (int): only used as a placeholder
             new (int): sets delay between sensor updates
         """
-        with self.queue_lock:
-            _ = self.defaults.delay_queue.get()
-            self.defaults.delay_queue.put(new)
+        self.hertz_div.text = f"<b>Each plot is updating at {1/new:.1f}Hz</b>"
+        self.defaults.delay_queue.append(new)
 
 
 class BokehPlot:
-    def __init__(
-        self, parent: BokehPage, sensor_thread: Sensor, defaults: PlotDefaults
-    ) -> None:
+    def __init__(self, parent: BokehPage, sensor_details: SensorDetails) -> None:
         """Initialise a plot
 
         Args:
             parent (BokehPage): parent that will contain the plot
-            sensor_thread (Sensor): sensor thread the generates data
-            defaults (PlotDefaults): plot defaults
+            signal (SensorConsumer): sensor signal producer
         """
         self.parent = parent
         self.doc = parent.doc
 
-        self.is_plotting = True
         self.colours = cycle(palette)
 
-        self.sensor_thread = sensor_thread
-        self.defaults = defaults
+        self.defaults = PlotDefaults(sensor_details)
 
         self.plot_options = dict(
-            width=defaults.plot_width,
-            height=defaults.plot_height,
-            tools=[HoverTool(tooltips=defaults.tooltips), defaults.plot_tools],
+            width=self.defaults.plot_width,
+            height=self.defaults.plot_height,
+            tools=[
+                HoverTool(tooltips=self.defaults.tooltips),
+                self.defaults.plot_tools,
+            ],
         )
 
         self.source, self.plt = self.definePlot()
@@ -270,10 +275,11 @@ class BokehPlot:
 
     @gen.coroutine
     def update(self, new_data: dict):
-        """update source data from sensor data  
+        """update source data from sensor data
 
         Args:
             new_data (dict): newest data
         """
-        if self.is_plotting:
+
+        if self.parent.sensor_is_reading.is_set():
             self.source.stream(new_data, rollover=self.parent.window_width)
